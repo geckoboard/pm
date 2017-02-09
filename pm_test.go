@@ -101,7 +101,7 @@ func TestProclist(t *testing.T) {
 	attrs2["database"] = "customers"
 	SetAttribute("req2", "database", "customers")
 
-	procs := DefaultProclist.getProcs()
+	procs := DefaultProclist.GetAll()
 	if len(procs) != 2 {
 		t.Fatalf("len(procs) = %d; expecting 2", len(procs))
 	}
@@ -156,7 +156,7 @@ func TestProclist(t *testing.T) {
 		CheckCancel("req1")
 	}()
 
-	history, err := DefaultProclist.getHistory("req1")
+	history, err := DefaultProclist.GetHistory("req1")
 	if err != nil {
 		t.Fatal("unable to retrieve history")
 	}

@@ -258,6 +258,60 @@ func (pl *Proclist) DelAttribute(id, name string) {
 	}
 }
 
+func (pl *Proclist) GetHistory(id string) ([]HistoryDetail, error) {
+	pl.mu.RLock()
+	p, present := pl.procs[id]
+	pl.mu.RUnlock()
+
+	if !present {
+		return []HistoryDetail{}, ErrNoSuchProcess
+	}
+
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	history := make([]HistoryDetail, 0, p.history.Len())
+
+	entry := p.history.Front()
+	for entry != nil {
+		v := entry.Value.(*historyEntry)
+		history = append(history, HistoryDetail{
+			Ts:     v.ts,
+			Status: v.status,
+		})
+		entry = entry.Next()
+	}
+
+	return history, nil
+}
+
+func (pl *Proclist) GetAll() []ProcDetail {
+	pl.mu.RLock()
+	defer pl.mu.RUnlock()
+	procs := make([]ProcDetail, 0, len(pl.procs))
+
+	for id, p := range pl.procs {
+		p.mu.RLock()
+		attrs := make(map[string]interface{})
+		for name, value := range p.attrs {
+			attrs[name] = value
+		}
+		firstHEntry := p.history.Front().Value.(*historyEntry)
+		lastHEntry := p.history.Back().Value.(*historyEntry)
+
+		procs = append(procs, ProcDetail{
+			Id:         id,
+			Attrs:      attrs,
+			ProcTime:   firstHEntry.ts,
+			StatusTime: lastHEntry.ts,
+			Status:     lastHEntry.status,
+			Cancelling: p.cancel.isPending,
+		})
+		p.mu.RUnlock()
+	}
+
+	return procs
+}
+
 // Type CancelErr is the type used for cancellation-induced panics.
 type CancelErr string
 
