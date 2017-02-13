@@ -15,41 +15,13 @@ const (
 	MediaJSON         = "application/json"
 )
 
-func (pl *Proclist) getProcs() []ProcDetail {
-	pl.mu.RLock()
-	defer pl.mu.RUnlock()
-	procs := make([]ProcDetail, 0, len(pl.procs))
-
-	for id, p := range pl.procs {
-		p.mu.RLock()
-		attrs := make(map[string]interface{})
-		for name, value := range p.attrs {
-			attrs[name] = value
-		}
-		firstHEntry := p.history.Front().Value.(*historyEntry)
-		lastHEntry := p.history.Back().Value.(*historyEntry)
-
-		procs = append(procs, ProcDetail{
-			Id:         id,
-			Attrs:      attrs,
-			ProcTime:   firstHEntry.ts,
-			StatusTime: lastHEntry.ts,
-			Status:     lastHEntry.status,
-			Cancelling: p.cancel.isPending,
-		})
-		p.mu.RUnlock()
-	}
-
-	return procs
-}
-
 func httpError(w http.ResponseWriter, httpCode int) {
 	http.Error(w, http.StatusText(httpCode), httpCode)
 }
 
 func (pl *Proclist) handleProclistReq(w http.ResponseWriter, r *http.Request) {
 	b, err := json.Marshal(ProcResponse{
-		Procs:      pl.getProcs(),
+		Procs:      pl.GetAll(),
 		ServerTime: time.Now(),
 	})
 	if err != nil {
@@ -60,34 +32,8 @@ func (pl *Proclist) handleProclistReq(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-func (pl *Proclist) getHistory(id string) ([]HistoryDetail, error) {
-	pl.mu.RLock()
-	p, present := pl.procs[id]
-	pl.mu.RUnlock()
-
-	if !present {
-		return []HistoryDetail{}, ErrNoSuchProcess
-	}
-
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-	history := make([]HistoryDetail, 0, p.history.Len())
-
-	entry := p.history.Front()
-	for entry != nil {
-		v := entry.Value.(*historyEntry)
-		history = append(history, HistoryDetail{
-			Ts:     v.ts,
-			Status: v.status,
-		})
-		entry = entry.Next()
-	}
-
-	return history, nil
-}
-
 func (pl *Proclist) handleHistoryReq(w http.ResponseWriter, r *http.Request, id string) {
-	history, err := pl.getHistory(id)
+	history, err := pl.GetHistory(id)
 	if err != nil {
 		httpError(w, http.StatusNotFound)
 	}
